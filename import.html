@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Vocab CSV Yükleyici</title>
+<style>
+  body{font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif;margin:24px;max-width:820px}
+  .card{border:1px solid #ddd;border-radius:10px;padding:16px;margin-bottom:16px}
+  textarea{width:100%;min-height:160px}
+  table{width:100%;border-collapse:collapse;margin-top:10px}
+  th,td{border-bottom:1px solid #eee;padding:6px 8px;text-align:left}
+  button{padding:10px 14px;border-radius:8px;border:1px solid #ccc;background:#0ea5a4;color:#fff;cursor:pointer}
+  .ghost{background:#fff;color:#333}
+</style>
+</head>
+<body>
+<h1>Vocab CSV Yükleyici</h1>
+<p>Bu sayfa <b>vocab-notebook</b> uygulamasının veritabanını (localStorage) CSV ile doldurur/günceller. Sonra ana sayfaya dönebilirsin.</p>
+
+<div class="card">
+  <h3>Dosyadan yükle</h3>
+  <input id="file" type="file" accept=".csv,text/csv">
+  <button id="loadFile">Yükle</button>
+</div>
+
+<div class="card">
+  <h3>Yapıştırarak yükle</h3>
+  <p>CSV’yi buraya yapıştır (ilk satırda başlık varsa <code>tr,de,note</code>; yoksa <b>1. sütun TR</b>, <b>2. sütun DE</b> kabul edilir):</p>
+  <textarea id="paste"></textarea>
+  <div style="margin-top:8px;display:flex;gap:8px">
+    <button id="loadPaste">Yükle</button>
+    <button class="ghost" id="sample">Örnek CSV yapıştır</button>
+  </div>
+</div>
+
+<div class="card" id="result" style="display:none">
+  <h3>Sonuç</h3>
+  <div id="msg"></div>
+  <div id="previewWrap"></div>
+  <div style="margin-top:12px">
+    <a href="./" style="text-decoration:none">
+      <button>Ana uygulamayı aç</button>
+    </a>
+  </div>
+</div>
+
+<script>
+const LS_KEY = 'vocab_notebook_v1';
+
+const normalizeKey = s => (s||'').toString()
+  .trim()
+  .toLocaleLowerCase('tr')
+  .normalize('NFD')
+  .replace(/\p{Diacritic}/gu,'')
+  .replace(/\s+/g,' ');
+
+function parseCsv(text){
+  // strip BOM
+  if(text.charCodeAt(0)===0xFEFF) text = text.slice(1);
+  const lines = text.split(/\r?\n/).filter(l => l.trim().length>0);
+  if(!lines.length) return [];
+  const header = lines[0];
+  const delim = ((header.match(/;/g)||[]).length > (header.match(/,/g)||[]).length) ? ';' : ',';
+
+  function parseLine(line){
+    const out=[]; let cur=''; let inQ=false;
+    for(let i=0;i<line.length;i++){
+      const ch=line[i];
+      if(inQ){
+        if(ch==='"' && line[i+1]==='"'){ cur+='"'; i++; }
+        else if(ch === '"'){ inQ=false; }
+        else { cur+=ch; }
+      } else {
+        if(ch === '"'){ inQ=true; }
+        else if(ch === delim){ out.push(cur); cur=''; }
+        else { cur+=ch; }
+      }
+    }
+    out.push(cur); return out;
+  }
+
+  const head = parseLine(header).map(h=>h.trim().replace(/^\\"|\\"$/g,'').toLowerCase());
+  let ti = head.indexOf('tr');
+  let di = head.indexOf('de');
+  let ni = head.indexOf('note');
+  // fallbacks (no header)
+  if(ti === -1) ti = 0;
+  if(di === -1) di = head.length>1 ? 1 : -1;
+
+  const rows = [];
+  for(let i=1;i<lines.length;i++){
+    const cols = parseLine(lines[i]);
+    const tr = (cols[ti]||'').trim();
+    if(!tr) continue;
+    const de = di>=0 ? (cols[di]||'').trim() : '';
+    const note = ni>=0 ? (cols[ni]||'').trim() : '';
+    rows.push({tr, de, note});
+  }
+  return rows;
+}
+
+function loadStore(){
+  try{ return JSON.parse(localStorage.getItem(LS_KEY))||[]; }catch(_){ return []; }
+}
+function saveStore(arr){ localStorage.setItem(LS_KEY, JSON.stringify(arr)); }
+
+function mergeRows(rows){
+  let store = loadStore();
+  let added=0, updated=0;
+  for(const r of rows){
+    const key = normalizeKey(r.tr);
+    if(!key) continue;
+    const idx = store.findIndex(x => x.key === key);
+    const now = Date.now();
+    if(idx>=0){
+      const cur = store[idx];
+      store[idx] = { ...cur, tr: r.tr, de: r.de || cur.de || '', note: r.note || cur.note || '', updated: now };
+      updated++;
+    } else {
+      store.push({ key, tr: r.tr, de: r.de || '', note: r.note || '', created: now, updated: now });
+      added++;
+    }
+  }
+  saveStore(store);
+  return {added, updated, total: store.length};
+}
+
+function showResult(info, previewRows){
+  const res = document.getElementById('result');
+  res.style.display = '';
+  document.getElementById('msg').textContent = `${info.added} yeni, ${info.updated} güncelleme. Toplam: ${info.total} kayıt.`;
+  // preview
+  const prev = previewRows.slice(0, 20);
+  let html = '<table><thead><tr><th>tr</th><th>de</th><th>note</th></tr></thead><tbody>';
+  for(const r of prev){ html += `<tr><td>${escapeHtml(r.tr)}</td><td>${escapeHtml(r.de)}</td><td>${escapeHtml(r.note||'')}</td></tr>`; }
+  html += '</tbody></table>';
+  document.getElementById('previewWrap').innerHTML = html;
+}
+function escapeHtml(s){ return (s==null?'':String(s)).replace(/[&<>\"']/g, m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[m])); }
+
+document.getElementById('loadFile').addEventListener('click', async () => {
+  const f = document.getElementById('file').files[0];
+  if(!f){ alert('Önce CSV dosyasını seç.'); return; }
+  const text = await f.text();
+  const rows = parseCsv(text);
+  if(!rows.length){ alert('CSV boş veya çözümlenemedi.'); return; }
+  const info = mergeRows(rows);
+  showResult(info, rows);
+});
+
+document.getElementById('loadPaste').addEventListener('click', () => {
+  const text = document.getElementById('paste').value;
+  if(!text.trim()){ alert('Önce CSV içeriğini yapıştır.'); return; }
+  const rows = parseCsv(text);
+  if(!rows.length){ alert('İçerik boş veya çözümlenemedi.'); return; }
+  const info = mergeRows(rows);
+  showResult(info, rows);
+});
+
+document.getElementById('sample').addEventListener('click', () => {
+  document.getElementById('paste').value = "tr,de\nEv,Haus\nAraba,Auto\nMerhaba,Hallo";
+});
+</script>
+</body>
+</html>
