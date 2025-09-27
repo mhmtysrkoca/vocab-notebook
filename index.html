@@ -206,36 +206,54 @@
 
     function importCsv(file){
       file.text().then(txt=>{
-        const lines = txt.split(/\r?\n/).filter(Boolean);
-        if(!lines.length) return;
-        const head = lines[0].split(',').map(h=>h.trim().replace(/^"|"$/g,''));
-        const di = head.findIndex(h=> h.toLowerCase()==='de');
-        const ti = head.findIndex(h=> h.toLowerCase()==='tr');
-        const ni = head.findIndex(h=> h.toLowerCase()==='note');
-        if(ti===-1){ alert('CSV ilk satırında en azından "tr" başlığı olmalı.'); return; }
-        let arr = load();
+        // strip BOM if exists
+        if(txt.charCodeAt(0)===0xFEFF){ txt = txt.slice(1); }
+        const lines = txt.split(/
+?
+/).filter(l => l.trim().length>0);
+        if(!lines.length){ alert('CSV boş görünüyor.'); return; }
+        // detect delimiter (comma vs semicolon)
+        const headerLine = lines[0];
+        const delim = ((headerLine.match(/;/g)||[]).length > (headerLine.match(/,/g)||[]).length) ? ';' : ',';
+        const head = parseCsvLine(headerLine, delim).map(h=>h.trim().replace(/^\"|\"$/g,'').replace(/﻿/g,''));
+        let ti = head.findIndex(h=> h.toLowerCase()==='tr');
+        let di = head.findIndex(h=> h.toLowerCase()==='de');
+        let ni = head.findIndex(h=> h.toLowerCase()==='note');
+        // fallbacks: assume first col is tr, second is de
+        if(ti===-1) ti = 0;
+        if(di===-1) di = head.length>1 ? 1 : -1;
+
+        let arr = load(); let added=0, updated=0;
         for(let i=1;i<lines.length;i++){
-          const cols = parseCsvLine(lines[i]);
+          const cols = parseCsvLine(lines[i], delim);
           const tr = (cols[ti]||'').trim(); if(!tr) continue;
           const de = di>=0 ? (cols[di]||'').trim() : '';
           const note = ni>=0 ? (cols[ni]||'').trim() : '';
           const key = normalizeKey(tr);
-          const j = arr.findIndex(x => x.key===key);
+          const idx = arr.findIndex(x => x.key===key);
           const now = Date.now();
-          if(j>=0){
-            const cur = arr[j];
-            arr[j] = { ...cur, tr, de: de||cur.de||'', note: note||cur.note||'', updated: now };
+          if(idx>=0){
+            const cur = arr[idx];
+            arr[idx] = { ...cur, tr, de: de||cur.de||'', note: note||cur.note||'', updated: now };
+            updated++;
           } else {
             arr.push({ key, tr, de, note, created: now, updated: now });
+            added++;
           }
+        }
+        save(arr); render();
+        alert(`${added} yeni, ${updated} güncelleme yapıldı.`);
+      }).catch(err=> alert('CSV okunamadı: '+ (err.message||err)));
+    }
         }
         save(arr); render();
       });
     }
 
-    function parseCsvLine(line){
-      // handles simple CSV with quotes
-      const out=[]; let cur=''; let inQ=false; for(let i=0;i<line.length;i++){
+    function parseCsvLine(line, delim=','){
+      // handles CSV with quotes and custom delimiter
+      const out=[]; let cur=''; let inQ=false;
+      for(let i=0;i<line.length;i++){
         const ch=line[i];
         if(inQ){
           if(ch==='"' && line[i+1]==='"'){ cur+='"'; i++; }
@@ -243,9 +261,12 @@
           else { cur+=ch; }
         } else {
           if(ch==='"'){ inQ=true; }
-          else if(ch===','){ out.push(cur); cur=''; }
+          else if(ch===delim){ out.push(cur); cur=''; }
           else { cur+=ch; }
         }
+      }
+      out.push(cur); return out;
+    }
       }
       out.push(cur); return out;
     }
