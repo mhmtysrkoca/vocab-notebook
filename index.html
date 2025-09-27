@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Almanca Kelime Defteri</title>
+  <meta name="description" content="Kendi kelime defterin: Türkçe → Almanca eşleştirmeleri kaydet, aynı kelimeyi birden fazla yazsan bile tek kayıt tut; liste her zaman alfabetik. Arama, düzenleme, silme, CSV içe/dışa aktarım ve yerel kayıt (localStorage)." />
+  <style>
+    :root{--bg:#0f172a;--card:#0b1220;--accent:#38bdf8;--muted:#94a3b8;--glass:rgba(255,255,255,0.06)}
+    *{box-sizing:border-box;font-family:Inter,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
+    body{margin:0;background:linear-gradient(180deg,#071029 0%, #0b1220 100%);color:#e6eef8;min-height:100vh;padding:28px}
+    .container{max-width:1000px;margin:0 auto}
+    header{display:flex;gap:12px;align-items:center;margin-bottom:16px}
+    h1{font-size:22px;margin:0}
+    .card{background:var(--card);border-radius:14px;padding:16px;box-shadow:0 8px 24px rgba(2,6,23,.55)}
+    label{display:block;font-size:13px;color:var(--muted);margin-bottom:6px}
+    input[type=text]{width:100%;padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,.08);background:var(--glass);color:inherit}
+    button{background:var(--accent);border:none;color:#051427;padding:10px 14px;border-radius:10px;cursor:pointer;font-weight:800}
+    .row{display:flex;gap:10px}
+    .row>div{flex:1}
+    .tools{display:flex;gap:8px;flex-wrap:wrap}
+    .ghost{background:transparent;color:#e6eef8;border:1px solid rgba(255,255,255,.12)}
+    .muted{color:var(--muted);font-size:13px}
+    table{width:100%;border-collapse:collapse;margin-top:10px}
+    th,td{padding:8px;border-bottom:1px solid rgba(255,255,255,.08);font-size:14px}
+    th{color:var(--muted);text-align:left}
+    td.actions{width:110px;text-align:right}
+    .kpi{font-size:13px;color:var(--muted)}
+    .pill{display:inline-block;font-size:11px;border:1px solid rgba(255,255,255,.12);padding:2px 8px;border-radius:999px}
+    .grid{display:grid;grid-template-columns:1fr;gap:12px}
+    @media(min-width:860px){.grid{grid-template-columns:1fr 1fr}}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <svg width="36" height="36" viewBox="0 0 24 24" fill="none" aria-hidden>
+        <rect x="2" y="2" width="20" height="20" rx="6" fill="#0b1220" stroke="#38bdf8" stroke-width="1.2" />
+        <path d="M6 15c1.5-3 4.5-4 7-4s5.5 1 6 4" stroke="#38bdf8" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+      </svg>
+      <div>
+        <h1>Almanca Kelime Defteri</h1>
+        <div class="muted">Aynı kelimeyi kaç kez yazarsan yaz: 
+          <span class="pill">tek kayıt</span> tutulur. Liste her zaman <span class="pill">alfabetik</span>.
+        </div>
+      </div>
+    </header>
+
+    <div class="grid">
+      <!-- INPUTS -->
+      <section class="card">
+        <h2 style="margin:0 0 8px 0;font-size:18px">Yeni kelime ekle / güncelle</h2>
+        <div class="row">
+          <div>
+            <label for="tr">Kelime (Türkçe)</label>
+            <input id="tr" type="text" placeholder="ör. ev" autofocus />
+          </div>
+          <div>
+            <label for="de">Almanca karşılığı</label>
+            <input id="de" type="text" placeholder="ör. Haus" />
+          </div>
+        </div>
+        <div class="row" style="margin-top:10px">
+          <div>
+            <label for="note">Not (opsiyonel)</label>
+            <input id="note" type="text" placeholder="ör. çoğulu: Häuser; artikel: das" />
+          </div>
+          <div style="align-self:end; display:flex; gap:8px; justify-content:flex-end">
+            <button id="add">Ekle / Güncelle</button>
+            <button class="ghost" id="clearInputs">Temizle</button>
+          </div>
+        </div>
+        <div class="muted" style="margin-top:6px">* Aynı Türkçe kelimeyi tekrar yazarsan mevcut kayıt <b>güncellenir</b>; listeye ikinci kez eklenmez.</div>
+      </section>
+
+      <!-- TOOLS & LIST -->
+      <section class="card">
+        <div class="row" style="align-items:end">
+          <div style="flex:1">
+            <label for="search">Ara</label>
+            <input id="search" type="text" placeholder="Türkçe/Almanca içinde ara..." />
+          </div>
+          <div style="text-align:right">
+            <div class="kpi"><span id="count">0</span> kayıt</div>
+          </div>
+        </div>
+        <div class="tools" style="margin-top:10px">
+          <button class="ghost" id="exportCsv">CSV Dışa Aktar</button>
+          <label class="ghost" style="display:inline-flex;align-items:center;gap:8px;padding:10px 12px;border-radius:10px;cursor:pointer">
+            <input id="importCsv" type="file" accept=".csv,text/csv" style="display:none">CSV İçe Aktar
+          </label>
+          <button class="ghost" id="clearAll" title="Tüm kayıtları sil">Hepsini Sil</button>
+        </div>
+        <div style="max-height:420px;overflow:auto;margin-top:10px">
+          <table id="table">
+            <thead>
+              <tr><th>Türkçe</th><th>Almanca</th><th>Not</th><th style="width:120px;text-align:right">İşlemler</th></tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+          <div id="empty" class="muted" style="display:none;margin-top:8px">Kayıt yok. Üstten kelime ekleyebilirsin.</div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <script>
+    // ---------- Utils ----------
+    const $ = s => document.querySelector(s);
+    const $$ = s => document.querySelectorAll(s);
+    const LS_KEY = 'vocab_notebook_v1';
+
+    function normalizeKey(str){
+      return (str||'')
+        .toString()
+        .trim()
+        .toLocaleLowerCase('tr')
+        .normalize('NFD')
+        .replace(/\p{Diacritic}/gu,'')
+        .replace(/\s+/g,' ');
+    }
+
+    function load(){
+      try{ return JSON.parse(localStorage.getItem(LS_KEY))||[]; }catch(_){ return []; }
+    }
+    function save(arr){ localStorage.setItem(LS_KEY, JSON.stringify(arr)); }
+
+    function render(){
+      let items = load();
+      const q = normalizeKey($('#search').value);
+      if(q){ items = items.filter(x => normalizeKey(x.tr).includes(q) || normalizeKey(x.de).includes(q) || normalizeKey(x.note).includes(q)); }
+      // always sort by TR (Turkish) alphabetically
+      items.sort((a,b)=> a.tr.localeCompare(b.tr,'tr',{sensitivity:'base'}));
+
+      const tb = $('#table tbody'); tb.innerHTML = '';
+      $('#count').textContent = items.length;
+      $('#empty').style.display = items.length? 'none':'block';
+
+      for(const it of items){
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${escapeHtml(it.tr)}</td><td>${escapeHtml(it.de||'')}</td><td>${escapeHtml(it.note||'')}</td>
+                        <td class="actions" style="text-align:right">
+                          <button class="ghost" data-act="edit">Düzenle</button>
+                          <button class="ghost" data-act="del">Sil</button>
+                        </td>`;
+        tr.querySelector('[data-act="edit"]').addEventListener('click', ()=>{
+          $('#tr').value = it.tr; $('#de').value = it.de||''; $('#note').value = it.note||''; $('#tr').focus();
+        });
+        tr.querySelector('[data-act="del"]').addEventListener('click', ()=>{
+          if(confirm(`Silinsin mi?\n${it.tr} → ${it.de||''}`)){
+            let arr = load();
+            arr = arr.filter(x => x.key !== it.key);
+            save(arr); render();
+          }
+        });
+        tb.appendChild(tr);
+      }
+    }
+
+    function escapeHtml(s){ return (s==null?'':String(s)).replace(/[&<>"']/g, m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m])); }
+
+    function addOrUpdate(){
+      const trWord = $('#tr').value.trim();
+      const deWord = $('#de').value.trim();
+      const note = $('#note').value.trim();
+      if(!trWord){ alert('Türkçe kelime boş olamaz.'); $('#tr').focus(); return; }
+      const key = normalizeKey(trWord);
+      let arr = load();
+      const i = arr.findIndex(x => x.key === key);
+      const now = Date.now();
+      if(i>=0){
+        // update existing: don't duplicate
+        const cur = arr[i];
+        arr[i] = {
+          ...cur,
+          tr: trWord,
+          de: deWord || cur.de || '',
+          note: note || cur.note || '',
+          updated: now
+        };
+      } else {
+        arr.push({ key, tr: trWord, de: deWord||'', note: note||'', created: now, updated: now });
+      }
+      save(arr);
+      // clear DE/Note (TR kalabilir; tercihine göre değiştir)
+      $('#de').value=''; $('#note').value='';
+      $('#tr').focus();
+      render();
+    }
+
+    function exportCsv(){
+      const arr = load().sort((a,b)=> a.tr.localeCompare(b.tr,'tr',{sensitivity:'base'}));
+      const head = ['tr','de','note','created','updated'];
+      const lines = [head.join(',')];
+      for(const x of arr){
+        const row = [x.tr, x.de||'', x.note||'', x.created||'', x.updated||'']
+          .map(v=> '"'+ String(v??'').replace(/"/g,'""') +'"')
+          .join(',');
+        lines.push(row);
+      }
+      const csv = lines.join('\n');
+      const blob = new Blob([csv],{type:'text/csv;charset=utf-8;'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href=url; a.download='vocab.csv'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+    }
+
+    function importCsv(file){
+      file.text().then(txt=>{
+        const lines = txt.split(/\r?\n/).filter(Boolean);
+        if(!lines.length) return;
+        const head = lines[0].split(',').map(h=>h.trim().replace(/^"|"$/g,''));
+        const di = head.findIndex(h=> h.toLowerCase()==='de');
+        const ti = head.findIndex(h=> h.toLowerCase()==='tr');
+        const ni = head.findIndex(h=> h.toLowerCase()==='note');
+        if(ti===-1){ alert('CSV ilk satırında en azından "tr" başlığı olmalı.'); return; }
+        let arr = load();
+        for(let i=1;i<lines.length;i++){
+          const cols = parseCsvLine(lines[i]);
+          const tr = (cols[ti]||'').trim(); if(!tr) continue;
+          const de = di>=0 ? (cols[di]||'').trim() : '';
+          const note = ni>=0 ? (cols[ni]||'').trim() : '';
+          const key = normalizeKey(tr);
+          const j = arr.findIndex(x => x.key===key);
+          const now = Date.now();
+          if(j>=0){
+            const cur = arr[j];
+            arr[j] = { ...cur, tr, de: de||cur.de||'', note: note||cur.note||'', updated: now };
+          } else {
+            arr.push({ key, tr, de, note, created: now, updated: now });
+          }
+        }
+        save(arr); render();
+      });
+    }
+
+    function parseCsvLine(line){
+      // handles simple CSV with quotes
+      const out=[]; let cur=''; let inQ=false; for(let i=0;i<line.length;i++){
+        const ch=line[i];
+        if(inQ){
+          if(ch==='"' && line[i+1]==='"'){ cur+='"'; i++; }
+          else if(ch==='"'){ inQ=false; }
+          else { cur+=ch; }
+        } else {
+          if(ch==='"'){ inQ=true; }
+          else if(ch===','){ out.push(cur); cur=''; }
+          else { cur+=ch; }
+        }
+      }
+      out.push(cur); return out;
+    }
+
+    // ---------- Events ----------
+    $('#add').addEventListener('click', addOrUpdate);
+    $('#tr').addEventListener('keydown', e=>{ if(e.key==='Enter') $('#de').focus(); });
+    $('#de').addEventListener('keydown', e=>{ if(e.key==='Enter') addOrUpdate(); });
+    $('#note').addEventListener('keydown', e=>{ if(e.key==='Enter') addOrUpdate(); });
+
+    $('#search').addEventListener('input', render);
+    $('#exportCsv').addEventListener('click', exportCsv);
+    $('#importCsv').addEventListener('change', e=>{ const f=e.target.files[0]; if(f) importCsv(f); e.target.value=''; });
+    $('#clearAll').addEventListener('click', ()=>{ if(confirm('Tüm kayıtlar silinsin mi?')){ localStorage.removeItem(LS_KEY); render(); }});
+    $('#clearInputs').addEventListener('click', ()=>{ $('#tr').value=''; $('#de').value=''; $('#note').value=''; $('#tr').focus(); });
+
+    // initial
+    render();
+  </script>
+</body>
+</html>
